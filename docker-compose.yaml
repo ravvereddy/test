@@ -1,0 +1,58 @@
+version: '3'
+
+services: 
+  mongo:
+    build: ./mongoDb
+    volumes:
+      - "./mongoDb/mongoVolume/db:/data/db"
+    restart: always
+    ports:
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+
+  rabbitmq:
+    build: ./rabbitmq
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    restart: on-failure
+
+  pythonapp:
+    build: ./pythonApp
+    container_name: pythonapp
+    ports:
+      - "5005:5005"
+    depends_on:
+      - rabbitmq
+      - mongo
+    environment:
+      - MONGO_HOST=mongo
+      - MONGO_AUTH_SOURCE=dbdev
+      - SERVER_IP=rabbitmq
+      - RABBIT_MQ_VHOST=/vhost1
+    restart: always
+  
+  celery:
+    build: ./pythonApp
+    command: celery -A app.celery_app worker --loglevel=info
+    environment:
+      - MONGO_HOST=mongo
+      - MONGO_AUTH_SOURCE=dbdev
+      - SERVER_IP=rabbitmq
+      - RABBIT_MQ_VHOST=/vhost1
+    depends_on:
+      - rabbitmq
+      - mongo
+    restart: always
+
+  ngnix:
+    build: ./nginx
+    container_name: nginx
+    ports:
+      - "8080:80"
+    depends_on:
+      - pythonapp
+    restart: always
